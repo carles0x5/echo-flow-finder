@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AlertRuleCard } from "@/components/alerts/AlertRuleCard";
 import { AlertNotificationCard } from "@/components/alerts/AlertNotificationCard";
 import { AlertConfigForm } from "@/components/alerts/AlertConfigForm";
+import { useAlertRules } from "@/hooks/useAlertRules";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { 
@@ -11,7 +12,6 @@ import {
   Plus,
   FileText,
   CheckCircle2,
-  Loader2,
   MailCheck,
   MessageSquare
 } from "lucide-react";
@@ -23,13 +23,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { supabaseAlerts } from "@/services/supabase";
-import { Database } from "@/integrations/supabase/types";
-import { useAuth } from "@/providers/AuthProvider";
-import { supabase } from "@/integrations/supabase/client";
-
-// Define types to match our UI components with database schemas
-type AlertRuleData = Database["public"]["Tables"]["alert_rules"]["Row"];
 
 // UI-friendly format for alert rules
 interface AlertRule {
@@ -41,43 +34,18 @@ interface AlertRule {
   active: boolean;
 }
 
-// Datos simulados para las alertas (se usarán como fallback)
-const mockAlertRules = [
-  {
-    id: "1",
-    name: "Menciones negativas",
-    description: "Alertar cuando haya menciones negativas de la marca principal",
-    triggers: ["sentimiento negativo", "marca principal"],
-    channels: ["App", "Email"],
-    active: true,
-  },
-  {
-    id: "2",
-    name: "Menciones de competidores",
-    description: "Monitorizar menciones de los competidores principales",
-    triggers: ["competidor A", "competidor B", "competidor C"],
-    channels: ["App", "Slack"],
-    active: true,
-  },
-  {
-    id: "3",
-    name: "Picos de menciones",
-    description: "Detectar incrementos anómalos en volumen de menciones",
-    triggers: ["incremento > 200%", "cualquier canal"],
-    channels: ["App", "Email", "Slack"],
-    active: false,
-  },
-  {
-    id: "4",
-    name: "Nuevas reseñas",
-    description: "Alertar sobre nuevas reseñas en plataformas especializadas",
-    triggers: ["nueva reseña", "blogs", "foros"],
-    channels: ["App"],
-    active: true,
-  },
-];
+interface AlertNotification {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: Date;
+  priority: "high" | "medium" | "low";
+  status: "new" | "read" | "resolved";
+  source: string;
+  url?: string;
+}
 
-const mockAlertNotifications = [
+const mockAlertNotifications: AlertNotification[] = [
   {
     id: "1",
     title: "Incremento de menciones negativas",
@@ -108,26 +76,15 @@ const mockAlertNotifications = [
     source: "Blog",
     url: "https://techreviews.example/producto-x",
   },
-  {
-    id: "4",
-    title: "Problema técnico reportado",
-    content: "Múltiples usuarios están reportando problemas de acceso a la plataforma. Se han detectado 25 menciones relacionadas en la última hora.",
-    timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000),
-    priority: "high" as const,
-    status: "resolved" as const,
-    source: "Twitter",
-    url: "https://twitter.com/search?q=problem",
-  },
 ];
 
 // Convert database alert rule to UI-friendly format
-function convertDbAlertRuleToUi(dbRule: AlertRuleData): AlertRule {
-  // Parse JSON fields from database
-  const triggers = typeof dbRule.triggers === 'object' ? 
-    (dbRule.triggers as any).keywords || [] : [];
+function convertDbAlertRuleToUi(dbRule: any): AlertRule {
+  const triggers = typeof dbRule.triggers === 'object' && dbRule.triggers ? 
+    (dbRule.triggers.keywords || []) : [];
   
-  const channels = typeof dbRule.channels === 'object' ? 
-    (dbRule.channels as any).notificationChannels || [] : [];
+  const channels = typeof dbRule.channels === 'object' && dbRule.channels ? 
+    (dbRule.channels.notificationChannels || []) : [];
 
   return {
     id: dbRule.id,
@@ -140,93 +97,39 @@ function convertDbAlertRuleToUi(dbRule: AlertRuleData): AlertRule {
 }
 
 export default function Alerts() {
-  const { user } = useAuth();
-  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
+  const { 
+    alertRules: dbAlertRules, 
+    isLoading, 
+    createAlertRule, 
+    updateAlertRule, 
+    deleteAlertRule,
+    isCreating,
+    isUpdating,
+    isDeleting
+  } = useAlertRules();
+
   const [alertNotifications, setAlertNotifications] = useState<AlertNotification[]>(mockAlertNotifications);
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
 
-  // Fetch alert rules from Supabase when component mounts
-  useEffect(() => {
-    async function fetchAlertRules() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        // If user is logged in, fetch their alert rules
-        if (user) {
-          const { data, error } = await supabaseAlerts.getAlertRules(user.id);
-          
-          if (error) {
-            console.error("Error fetching alert rules:", error);
-            setError("Failed to load alert rules. Please try again.");
-            // Fall back to mock data in case of error
-            setAlertRules(mockAlertRules);
-          } else if (data && data.length > 0) {
-            // Convert database format to UI format
-            const uiAlertRules = data.map(convertDbAlertRuleToUi);
-            setAlertRules(uiAlertRules);
-          } else {
-            // If no data, use mock data for now
-            setAlertRules(mockAlertRules);
-          }
-        } else {
-          // If not logged in, use mock data
-          setAlertRules(mockAlertRules);
-        }
-      } catch (err) {
-        console.error("Unexpected error:", err);
-        setError("An unexpected error occurred. Please try again.");
-        setAlertRules(mockAlertRules);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchAlertRules();
-  }, [user]);
+  // Convert database rules to UI format
+  const alertRules = dbAlertRules.map(convertDbAlertRuleToUi);
 
   const handleToggleAlertRule = (id: string, active: boolean) => {
-    // First update the UI optimistically
-    setAlertRules(
-      alertRules.map((rule) =>
-        rule.id === id ? { ...rule, active } : rule
-      )
-    );
-    
-    // Then update in the database
-    if (user) {
-      supabaseAlerts.updateAlertRule(id, { is_active: active })
-        .then(({ error }) => {
-          if (error) {
-            console.error("Error updating alert rule:", error);
-            // Revert the change if there was an error
-            setAlertRules(
-              alertRules.map((rule) =>
-                rule.id === id ? { ...rule, active: !active } : rule
-              )
-            );
-            setError("Failed to update alert status. Please try again.");
-          }
-        });
-    }
+    updateAlertRule({ id, rule: { is_active: active } });
   };
 
   const handleEditAlertRule = (id: string) => {
-    // Find the rule to edit
     const ruleToEdit = alertRules.find(rule => rule.id === id);
     if (ruleToEdit) {
-      // Convert the UI format back to form format
       setInitialFormData({
         name: ruleToEdit.name,
         description: ruleToEdit.description,
         keywords: ruleToEdit.triggers.join(', '),
-        sentimentThreshold: "any", // Default value
+        sentimentThreshold: "any",
         channels: ruleToEdit.channels,
-        sources: ["twitter", "facebook"], // Default sources
+        sources: ["twitter", "facebook"],
         isActive: ruleToEdit.active
       });
       setEditingRuleId(id);
@@ -235,43 +138,11 @@ export default function Alerts() {
   };
 
   const handleDeleteAlertRule = (id: string) => {
-    // Ask for confirmation before deleting
-    if (!confirm("Are you sure you want to delete this alert rule?")) {
+    if (!confirm("¿Estás seguro de que quieres eliminar esta regla de alerta?")) {
       return;
     }
-
-    // First update UI optimistically
-    setAlertRules(alertRules.filter((rule) => rule.id !== id));
-
-    // Then delete from database
-    if (user) {
-      supabaseAlerts.deleteAlertRule(id)
-        .then(({ error, success }) => {
-          if (error || !success) {
-            console.error("Error deleting alert rule:", error);
-            // Fetch the rules again to restore the correct state
-            supabaseAlerts.getAlertRules(user.id).then(({ data }) => {
-              if (data) {
-                setAlertRules(data.map(convertDbAlertRuleToUi));
-              }
-            });
-            setError("Failed to delete alert rule. Please try again.");
-          }
-        });
-    }
+    deleteAlertRule(id);
   };
-
-  // Definimos los tipos para las alertas
-  interface AlertNotification {
-    id: string;
-    title: string;
-    content: string;
-    timestamp: Date;
-    priority: "high" | "medium" | "low";
-    status: "new" | "read" | "resolved";
-    source: string;
-    url?: string;
-  }
 
   const handleMarkAsRead = (id: string) => {
     setAlertNotifications(
@@ -296,63 +167,30 @@ export default function Alerts() {
   };
 
   const handleSubmitAlertConfig = async (values: any) => {
-    if (!user) {
-      setError("You must be logged in to create or update alert rules");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Prepare the data for Supabase
-      const alertRuleData = {
-        name: values.name,
-        description: values.description || "",
-        user_id: user.id,
-        is_active: values.isActive !== undefined ? values.isActive : true,
-        // Convert form values to the format expected by the database
-        triggers: {
-          keywords: values.keywords.split(',').map((k: string) => k.trim()),
-          sentimentThreshold: values.sentimentThreshold
-        },
-        channels: {
-          notificationChannels: values.channels
-        }
-      };
-
-      let result;
-      
-      if (editingRuleId) {
-        // Update existing rule
-        result = await supabaseAlerts.updateAlertRule(editingRuleId, alertRuleData);
-      } else {
-        // Create new rule
-        result = await supabaseAlerts.createAlertRule(alertRuleData);
+    console.log('Submitting alert config:', values);
+    
+    const alertRuleData = {
+      name: values.name,
+      description: values.description || "",
+      is_active: values.isActive !== undefined ? values.isActive : true,
+      triggers: {
+        keywords: values.keywords.split(',').map((k: string) => k.trim()),
+        sentimentThreshold: values.sentimentThreshold
+      },
+      channels: {
+        notificationChannels: values.channels
       }
+    };
 
-      const { data, error } = result;
-
-      if (error) {
-        console.error("Error saving alert rule:", error);
-        setError(`Failed to ${editingRuleId ? "update" : "create"} alert rule. Please try again.`);
-      } else if (data) {
-        // Refresh the alert rules list
-        const { data: refreshedData } = await supabaseAlerts.getAlertRules(user.id);
-        if (refreshedData) {
-          setAlertRules(refreshedData.map(convertDbAlertRuleToUi));
-        }
-        
-        // Reset editing state
-        setEditingRuleId(null);
-        setIsConfigDialogOpen(false);
-      }
-    } catch (err) {
-      console.error("Unexpected error saving alert rule:", err);
-      setError("An unexpected error occurred. Please try again.");
-    } finally {
-      setLoading(false);
+    if (editingRuleId) {
+      updateAlertRule({ id: editingRuleId, rule: alertRuleData });
+    } else {
+      createAlertRule(alertRuleData);
     }
+    
+    setEditingRuleId(null);
+    setInitialFormData(null);
+    setIsConfigDialogOpen(false);
   };
 
   return (
@@ -364,7 +202,6 @@ export default function Alerts() {
             <Dialog open={isConfigDialogOpen} onOpenChange={(open) => {
               setIsConfigDialogOpen(open);
               if (!open) {
-                // Reset editing state when dialog is closed
                 setEditingRuleId(null);
                 setInitialFormData(null);
               }
@@ -391,12 +228,6 @@ export default function Alerts() {
             </Dialog>
           </div>
         </div>
-
-        {error && (
-          <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-md">
-            {error}
-          </div>
-        )}
 
         <Tabs defaultValue="notifications">
           <TabsList className="mb-6">
@@ -455,9 +286,9 @@ export default function Alerts() {
           </TabsContent>
           
           <TabsContent value="rules">
-            {loading ? (
+            {isLoading ? (
               <div className="flex justify-center items-center h-32">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : alertRules.length === 0 ? (
               <div className="text-center py-8">
@@ -626,6 +457,11 @@ export default function Alerts() {
                   </div>
                 </div>
               </div>
+            </div>
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                Configuración de canales de notificación próximamente...
+              </p>
             </div>
           </TabsContent>
         </Tabs>

@@ -37,8 +37,12 @@ export function useAlertRules() {
         user_id: user.id,
       };
       
+      console.log('Creating alert rule:', ruleWithUserId);
       const { data, error } = await supabaseAlerts.createAlertRule(ruleWithUserId);
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating alert rule:', error);
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -47,14 +51,18 @@ export function useAlertRules() {
     },
     onError: (error: any) => {
       console.error('Error creating alert rule:', error);
-      toast.error('Failed to create alert rule');
+      toast.error(`Failed to create alert rule: ${error.message || 'Unknown error'}`);
     },
   });
 
   const updateAlertRule = useMutation({
     mutationFn: async ({ id, rule }: { id: string; rule: AlertRuleUpdate }) => {
+      console.log('Updating alert rule:', id, rule);
       const { data, error } = await supabaseAlerts.updateAlertRule(id, rule);
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating alert rule:', error);
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -63,14 +71,18 @@ export function useAlertRules() {
     },
     onError: (error: any) => {
       console.error('Error updating alert rule:', error);
-      toast.error('Failed to update alert rule');
+      toast.error(`Failed to update alert rule: ${error.message || 'Unknown error'}`);
     },
   });
 
   const deleteAlertRule = useMutation({
     mutationFn: async (id: string) => {
+      console.log('Deleting alert rule:', id);
       const { success, error } = await supabaseAlerts.deleteAlertRule(id);
-      if (error) throw error;
+      if (error || !success) {
+        console.error('Error deleting alert rule:', error);
+        throw error || new Error('Failed to delete alert rule');
+      }
       return success;
     },
     onSuccess: () => {
@@ -79,7 +91,7 @@ export function useAlertRules() {
     },
     onError: (error: any) => {
       console.error('Error deleting alert rule:', error);
-      toast.error('Failed to delete alert rule');
+      toast.error(`Failed to delete alert rule: ${error.message || 'Unknown error'}`);
     },
   });
 

@@ -1,3 +1,4 @@
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect } from "react";
 
 const alertConfigSchema = z.object({
   name: z.string().min(3, {
@@ -57,15 +59,36 @@ export function AlertConfigForm({
   const form = useForm<AlertConfigValues>({
     resolver: zodResolver(alertConfigSchema),
     defaultValues: {
-      name: initialData?.name || "",
-      description: initialData?.description || "",
-      keywords: initialData?.keywords || "",
-      sentimentThreshold: initialData?.sentimentThreshold || "any",
-      channels: initialData?.channels || [],
-      sources: initialData?.sources || [],
-      isActive: initialData?.isActive !== undefined ? initialData.isActive : true,
+      name: "",
+      description: "",
+      keywords: "",
+      sentimentThreshold: "any",
+      channels: [],
+      sources: [],
+      isActive: true,
     },
   });
+
+  // Update form values when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      console.log('Setting initial data:', initialData);
+      form.reset({
+        name: initialData.name || "",
+        description: initialData.description || "",
+        keywords: initialData.keywords || "",
+        sentimentThreshold: initialData.sentimentThreshold || "any",
+        channels: initialData.channels || [],
+        sources: initialData.sources || [],
+        isActive: initialData.isActive !== undefined ? initialData.isActive : true,
+      });
+    }
+  }, [initialData, form]);
+
+  const handleSubmit = (values: AlertConfigValues) => {
+    console.log('Form submitted with values:', values);
+    onSubmit(values);
+  };
 
   const notificationChannels = [
     { id: "app", label: "Aplicación" },
@@ -92,7 +115,7 @@ export function AlertConfigForm({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
@@ -115,7 +138,7 @@ export function AlertConfigForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sentimiento</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccionar umbral" />
@@ -289,18 +312,9 @@ export function AlertConfigForm({
             />
 
             <div className="flex justify-end gap-3">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    document.body.click();
-                  }
-                }}
-              >
-                Cancelar
+              <Button type="submit">
+                {isEditing ? 'Actualizar' : 'Guardar'}
               </Button>
-              <Button type="submit">Guardar</Button>
             </div>
           </form>
         </Form>

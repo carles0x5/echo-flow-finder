@@ -23,6 +23,8 @@ export default function Chat() {
 
   const handleQuerySelect = (query: string) => {
     setSelectedQuery(query);
+    // You can add logic here to pass the query to ChatInterface if needed
+    console.log("Selected query:", query);
   };
 
   return (
@@ -34,10 +36,7 @@ export default function Chat() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
-            <ChatInterface
-              onSaveQuery={handleSaveQuery}
-              initialQuery={selectedQuery}
-            />
+            <ChatInterface onSaveQuery={handleSaveQuery} />
           </div>
           <div className="space-y-4">
             <Card>
