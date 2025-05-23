@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ChatInterface } from "@/components/chat/ChatInterface";
-import { Button } from "@/components/ui/button";
-import { BookmarkIcon, InfoIcon } from "lucide-react";
+import { SavedQueriesList } from "@/components/chat/SavedQueriesList";
+import { useSavedQueries } from "@/hooks/useSavedQueries";
 import {
   Card,
   CardContent,
@@ -11,24 +11,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-// Consultas guardadas de ejemplo
-const savedQueries = [
-  { id: "1", text: "¿Cuál es la tendencia de menciones en el último mes?" },
-  { id: "2", text: "Muestra los comentarios negativos más recientes" },
-  { id: "3", text: "¿Cuál es el producto con mejor valoración?" },
-  { id: "4", text: "Compara el sentimiento entre Twitter y Facebook" },
-];
+import { InfoIcon } from "lucide-react";
 
 export default function Chat() {
-  const [userSavedQueries, setUserSavedQueries] = useState(savedQueries);
+  const { saveQuery } = useSavedQueries();
+  const [selectedQuery, setSelectedQuery] = useState<string>("");
 
   const handleSaveQuery = (query: string) => {
-    const newQuery = {
-      id: Date.now().toString(),
-      text: query,
-    };
-    setUserSavedQueries([...userSavedQueries, newQuery]);
+    saveQuery(query);
+  };
+
+  const handleQuerySelect = (query: string) => {
+    setSelectedQuery(query);
   };
 
   return (
@@ -41,8 +35,8 @@ export default function Chat() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
             <ChatInterface
-              savedQueries={userSavedQueries}
               onSaveQuery={handleSaveQuery}
+              initialQuery={selectedQuery}
             />
           </div>
           <div className="space-y-4">
@@ -65,32 +59,7 @@ export default function Chat() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Consultas guardadas</CardTitle>
-                <CardDescription>Tus consultas frecuentes</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {userSavedQueries.length > 0 ? (
-                  <ul className="space-y-2">
-                    {userSavedQueries.map((query) => (
-                      <li key={query.id} className="flex items-start gap-2">
-                        <BookmarkIcon className="h-4 w-4 mt-0.5 text-primary shrink-0" />
-                        <span className="text-sm">{query.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-4 text-center">
-                    <BookmarkIcon className="h-8 w-8 mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No tienes consultas guardadas</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Guarda tus consultas frecuentes para acceder rápidamente a ellas
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <SavedQueriesList onQuerySelect={handleQuerySelect} />
 
             <Card>
               <CardHeader className="pb-2">
