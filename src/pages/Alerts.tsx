@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AlertRuleCard } from "@/components/alerts/AlertRuleCard";
@@ -182,15 +183,19 @@ export default function Alerts() {
       }
     };
 
-    if (editingRuleId) {
-      updateAlertRule({ id: editingRuleId, rule: alertRuleData });
-    } else {
-      createAlertRule(alertRuleData);
+    try {
+      if (editingRuleId) {
+        await updateAlertRule({ id: editingRuleId, rule: alertRuleData });
+      } else {
+        await createAlertRule(alertRuleData);
+      }
+      
+      setEditingRuleId(null);
+      setInitialFormData(null);
+      setIsConfigDialogOpen(false);
+    } catch (error) {
+      console.error('Error submitting alert config:', error);
     }
-    
-    setEditingRuleId(null);
-    setInitialFormData(null);
-    setIsConfigDialogOpen(false);
   };
 
   return (
@@ -212,18 +217,20 @@ export default function Alerts() {
                   Nueva Alerta
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-3xl">
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingRuleId ? 'Editar Alerta' : 'Configurar Alerta'}</DialogTitle>
                   <DialogDescription>
                     Define los parámetros para la detección de alertas.
                   </DialogDescription>
                 </DialogHeader>
-                <AlertConfigForm 
-                  onSubmit={handleSubmitAlertConfig} 
-                  initialData={initialFormData}
-                  isEditing={!!editingRuleId}
-                />
+                <div className="max-h-[70vh] overflow-y-auto">
+                  <AlertConfigForm 
+                    onSubmit={handleSubmitAlertConfig} 
+                    initialData={initialFormData}
+                    isEditing={!!editingRuleId}
+                  />
+                </div>
               </DialogContent>
             </Dialog>
           </div>
