@@ -1,7 +1,7 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { supabaseAuth } from '@/services/supabase';
 
 interface AuthContextType {
   session: Session | null;
@@ -23,7 +23,7 @@ export const useAuth = () => {
   return context;
 };
 
-// Helper function to ensure user profile exists (used as a fallback)
+// Helper function to ensure user profile exists
 async function ensureUserProfile(user: User) {
   if (!user) return;
   
@@ -84,6 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Auth state changed:', event);
         setSession(session);
         setUser(session?.user ?? null);
+        
+        // Ensure user profile exists when signed in
+        if (event === 'SIGNED_IN' && session?.user) {
+          setTimeout(() => {
+            ensureUserProfile(session.user);
+          }, 0);
+        }
+        
         setLoading(false);
       }
     );
@@ -95,6 +103,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data } = await supabase.auth.getSession();
         setSession(data.session);
         setUser(data.session?.user ?? null);
+        
+        // Ensure profile exists for existing session
+        if (data.session?.user) {
+          setTimeout(() => {
+            ensureUserProfile(data.session.user);
+          }, 0);
+        }
       } catch (err) {
         console.error('Error checking session:', err);
       } finally {

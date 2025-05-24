@@ -4,10 +4,42 @@ import { supabaseAlerts } from '@/services/supabase';
 import { useAuth } from '@/providers/AuthProvider';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
+import { supabase } from '@/integrations/supabase/client';
 
 type AlertRule = Database['public']['Tables']['alert_rules']['Row'];
 type AlertRuleInsert = Database['public']['Tables']['alert_rules']['Insert'];
 type AlertRuleUpdate = Database['public']['Tables']['alert_rules']['Update'];
+
+// Helper function to ensure user profile exists
+async function ensureUserProfile(userId: string, userEmail: string) {
+  try {
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+    
+    if (!existingProfile) {
+      console.log('Creating missing profile for user:', userEmail);
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: userEmail,
+          role: 'viewer'
+        });
+      
+      if (error) {
+        console.error('Error creating profile:', error);
+        throw error;
+      }
+    }
+  } catch (error: any) {
+    if (error.code !== 'PGRST116') { // Not a "not found" error
+      throw error;
+    }
+  }
+}
 
 export function useAlertRules() {
   const { user } = useAuth();
@@ -30,7 +62,10 @@ export function useAlertRules() {
 
   const createAlertRule = useMutation({
     mutationFn: async (rule: Omit<AlertRuleInsert, 'user_id'>) => {
-      if (!user?.id) throw new Error('User not authenticated');
+      if (!user?.id || !user?.email) throw new Error('User not authenticated');
+      
+      // Ensure user profile exists before creating alert rule
+      await ensureUserProfile(user.id, user.email);
       
       const ruleWithUserId: AlertRuleInsert = {
         ...rule,
