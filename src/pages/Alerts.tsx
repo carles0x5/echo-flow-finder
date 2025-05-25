@@ -1,10 +1,10 @@
-
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { AlertRuleCard } from "@/components/alerts/AlertRuleCard";
 import { AlertNotificationCard } from "@/components/alerts/AlertNotificationCard";
 import { AlertConfigForm } from "@/components/alerts/AlertConfigForm";
 import { useAlertRules } from "@/hooks/useAlertRules";
+import { useAlertNotifications } from "@/hooks/useAlertNotifications";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { 
@@ -14,7 +14,8 @@ import {
   FileText,
   CheckCircle2,
   MailCheck,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from "lucide-react";
 import {
   Dialog,
@@ -34,50 +35,6 @@ interface AlertRule {
   channels: string[];
   active: boolean;
 }
-
-interface AlertNotification {
-  id: string;
-  title: string;
-  content: string;
-  timestamp: Date;
-  priority: "high" | "medium" | "low";
-  status: "new" | "read" | "resolved";
-  source: string;
-  url?: string;
-}
-
-const mockAlertNotifications: AlertNotification[] = [
-  {
-    id: "1",
-    title: "Incremento de menciones negativas",
-    content: "Se ha detectado un aumento del 45% en las menciones negativas relacionadas con 'servicio al cliente' en Twitter en las últimas 2 horas.",
-    timestamp: new Date(Date.now() - 35 * 60 * 1000),
-    priority: "high" as const,
-    status: "new" as const,
-    source: "Twitter",
-    url: "https://twitter.com/search?q=example",
-  },
-  {
-    id: "2",
-    title: "Mención de competidor viralizándose",
-    content: "Una publicación sobre el competidor A está ganando tracción rápidamente. Actualmente tiene 1,200 compartidos y 3,500 likes.",
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    priority: "medium" as const,
-    status: "read" as const,
-    source: "Facebook",
-    url: "https://facebook.com/post/example",
-  },
-  {
-    id: "3",
-    title: "Reseña negativa en blog especializado",
-    content: "Se ha publicado una reseña crítica sobre el producto X en el blog 'TechReviews'. La puntuación es de 2/5 estrellas.",
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    priority: "medium" as const,
-    status: "resolved" as const,
-    source: "Blog",
-    url: "https://techreviews.example/producto-x",
-  },
-];
 
 // Convert database alert rule to UI-friendly format
 function convertDbAlertRuleToUi(dbRule: any): AlertRule {
@@ -100,7 +57,7 @@ function convertDbAlertRuleToUi(dbRule: any): AlertRule {
 export default function Alerts() {
   const { 
     alertRules: dbAlertRules, 
-    isLoading, 
+    isLoading: isLoadingRules, 
     createAlertRule, 
     updateAlertRule, 
     deleteAlertRule,
@@ -109,7 +66,14 @@ export default function Alerts() {
     isDeleting
   } = useAlertRules();
 
-  const [alertNotifications, setAlertNotifications] = useState<AlertNotification[]>(mockAlertNotifications);
+  const {
+    alertNotifications,
+    isLoading: isLoadingNotifications,
+    error: notificationsError,
+    updateNotificationStatus,
+    isUpdating: isUpdatingNotification
+  } = useAlertNotifications();
+
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
@@ -146,25 +110,18 @@ export default function Alerts() {
   };
 
   const handleMarkAsRead = (id: string) => {
-    setAlertNotifications(
-      alertNotifications.map((notification) => {
-        if (notification.id === id) {
-          return { ...notification, status: "read" as const };
-        }
-        return notification;
-      })
-    );
+    updateNotificationStatus({ id, status: "read" });
   };
 
   const handleMarkAsResolved = (id: string) => {
-    setAlertNotifications(
-      alertNotifications.map((notification) => {
-        if (notification.id === id) {
-          return { ...notification, status: "resolved" as const };
-        }
-        return notification;
-      })
-    );
+    updateNotificationStatus({ id, status: "resolved" });
+  };
+
+  const handleMarkAllAsRead = () => {
+    const newNotifications = alertNotifications.filter(n => n.status === "new");
+    newNotifications.forEach(notification => {
+      updateNotificationStatus({ id: notification.id, status: "read" });
+    });
   };
 
   const handleSubmitAlertConfig = async (values: any) => {
@@ -250,52 +207,85 @@ export default function Alerts() {
           </TabsList>
           
           <TabsContent value="notifications">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="bg-blue-500/10 text-blue-600 py-1 px-3 rounded-full text-sm font-medium flex items-center">
-                  <MessageSquare className="h-3.5 w-3.5 mr-1" />
-                  {alertNotifications.filter((n) => n.status === "new").length} Nuevas
-                </div>
-                <div className="bg-gray-200 text-gray-600 py-1 px-3 rounded-full text-sm font-medium flex items-center">
-                  <FileText className="h-3.5 w-3.5 mr-1" />
-                  {alertNotifications.filter((n) => n.status === "read").length} Leídas
-                </div>
-                <div className="bg-green-500/10 text-green-600 py-1 px-3 rounded-full text-sm font-medium flex items-center">
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                  {alertNotifications.filter((n) => n.status === "resolved").length} Resueltas
-                </div>
+            {isLoadingNotifications ? (
+              <div className="flex justify-center items-center h-32">
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <span className="ml-2">Cargando notificaciones...</span>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Marcar todas como leídas
-                </Button>
+            ) : notificationsError ? (
+              <div className="text-center py-8">
+                <AlertTriangle className="h-12 w-12 mx-auto text-destructive mb-4" />
+                <h3 className="text-lg font-medium">Error al cargar las notificaciones</h3>
+                <p className="text-muted-foreground mb-4">
+                  Hubo un problema al cargar las notificaciones.
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-blue-500/10 text-blue-600 py-1 px-3 rounded-full text-sm font-medium flex items-center">
+                      <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                      {alertNotifications.filter((n) => n.status === "new").length} Nuevas
+                    </div>
+                    <div className="bg-gray-200 text-gray-600 py-1 px-3 rounded-full text-sm font-medium flex items-center">
+                      <FileText className="h-3.5 w-3.5 mr-1" />
+                      {alertNotifications.filter((n) => n.status === "read").length} Leídas
+                    </div>
+                    <div className="bg-green-500/10 text-green-600 py-1 px-3 rounded-full text-sm font-medium flex items-center">
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                      {alertNotifications.filter((n) => n.status === "resolved").length} Resueltas
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleMarkAllAsRead}
+                      disabled={isUpdatingNotification || alertNotifications.filter(n => n.status === "new").length === 0}
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Marcar todas como leídas
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="space-y-4">
-              {alertNotifications.map((notification) => (
-                <AlertNotificationCard
-                  key={notification.id}
-                  id={notification.id}
-                  title={notification.title}
-                  content={notification.content}
-                  timestamp={notification.timestamp}
-                  priority={notification.priority}
-                  status={notification.status}
-                  source={notification.source}
-                  url={notification.url}
-                  onMarkAsRead={handleMarkAsRead}
-                  onMarkAsResolved={handleMarkAsResolved}
-                />
-              ))}
-            </div>
+                {alertNotifications.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Bell className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-medium">No hay notificaciones</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Las notificaciones aparecerán aquí cuando se activen las reglas de alerta.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {alertNotifications.map((notification) => (
+                      <AlertNotificationCard
+                        key={notification.id}
+                        id={notification.id}
+                        title={notification.title}
+                        content={notification.content}
+                        timestamp={new Date(notification.created_at)}
+                        priority={notification.priority as "high" | "medium" | "low"}
+                        status={notification.status as "new" | "read" | "resolved"}
+                        source={notification.source}
+                        url={notification.url || undefined}
+                        onMarkAsRead={handleMarkAsRead}
+                        onMarkAsResolved={handleMarkAsResolved}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </TabsContent>
           
           <TabsContent value="rules">
-            {isLoading ? (
+            {isLoadingRules ? (
               <div className="flex justify-center items-center h-32">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <span className="ml-2">Cargando reglas...</span>
               </div>
             ) : alertRules.length === 0 ? (
               <div className="text-center py-8">

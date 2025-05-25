@@ -11,6 +11,10 @@ type AlertRule = Database['public']['Tables']['alert_rules']['Row'];
 type AlertRuleInsert = Database['public']['Tables']['alert_rules']['Insert'];
 type AlertRuleUpdate = Database['public']['Tables']['alert_rules']['Update'];
 
+// Types for alert notifications
+type AlertNotification = Database['public']['Tables']['alert_notifications']['Row'];
+type AlertNotificationUpdate = Database['public']['Tables']['alert_notifications']['Update'];
+
 // Estructura de la base de datos principal
 // Esta sería la estructura de las tablas en Supabase
 
@@ -327,8 +331,53 @@ export const supabaseAlerts = {
     }
   },
   
-  // getAlertNotifications: () => supabase.from('alert_notifications').select('*').order('created_at', { ascending: false }),
-  // updateNotificationStatus: (id: string, status: string) => supabase.from('alert_notifications').update({ status }).eq('id', id)
+  /**
+   * Get all alert notifications
+   * @returns Object containing alert notifications data or error
+   */
+  async getAlertNotifications(): Promise<{ data: AlertNotification[] | null; error: PostgrestError | null }> {
+    try {
+      const { data, error } = await supabase
+        .from('alert_notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching alert notifications:', error);
+      }
+      
+      return { data, error };
+    } catch (err) {
+      console.error('Unexpected error fetching alert notifications:', err);
+      return { data: null, error: err as PostgrestError };
+    }
+  },
+  
+  /**
+   * Update notification status
+   * @param id ID of the notification to update
+   * @param status New status for the notification
+   * @returns Object containing the updated notification or error
+   */
+  async updateNotificationStatus(id: string, status: string): Promise<{ data: AlertNotification | null; error: PostgrestError | null }> {
+    try {
+      const { data, error } = await supabase
+        .from('alert_notifications')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error(`Error updating notification status ${id}:`, error);
+      }
+      
+      return { data, error };
+    } catch (err) {
+      console.error(`Unexpected error updating notification status ${id}:`, err);
+      return { data: null, error: err as PostgrestError };
+    }
+  }
 };
 
 export const supabaseSources = {
