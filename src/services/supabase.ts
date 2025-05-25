@@ -20,6 +20,10 @@ type SourceConfiguration = Database['public']['Tables']['source_configurations']
 type SourceConfigurationInsert = Database['public']['Tables']['source_configurations']['Insert'];
 type SourceConfigurationUpdate = Database['public']['Tables']['source_configurations']['Update'];
 
+// Types for saved queries
+type SavedQuery = Database['public']['Tables']['saved_queries']['Row'];
+type SavedQueryInsert = Database['public']['Tables']['saved_queries']['Insert'];
+
 // Estructura de la base de datos principal
 // Esta sería la estructura de las tablas en Supabase
 
@@ -503,8 +507,82 @@ export const supabaseSources = {
 };
 
 export const supabaseQueries = {
-  // getSavedQueries: () => supabase.from('saved_queries').select('*').order('created_at', { ascending: false }),
-  // saveQuery: (query: string) => supabase.from('saved_queries').insert({ text: query })
+  /**
+   * Get all saved queries, optionally filtered by user_id
+   * @param userId Optional user ID to filter queries by
+   * @returns Object containing saved queries data or error
+   */
+  async getSavedQueries(userId?: string): Promise<{ data: SavedQuery[] | null; error: PostgrestError | null }> {
+    try {
+      let query = supabase
+        .from('saved_queries')
+        .select('*');
+      
+      // Add user filter if provided
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching saved queries:', error);
+      }
+      
+      return { data, error };
+    } catch (err) {
+      console.error('Unexpected error fetching saved queries:', err);
+      return { data: null, error: err as PostgrestError };
+    }
+  },
+
+  /**
+   * Save a new query
+   * @param query Query data to insert
+   * @returns Object containing the created query or error
+   */
+  async saveQuery(query: SavedQueryInsert): Promise<{ data: SavedQuery | null; error: PostgrestError | null }> {
+    try {
+      const { data, error } = await supabase
+        .from('saved_queries')
+        .insert(query)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error saving query:', error);
+      }
+      
+      return { data, error };
+    } catch (err) {
+      console.error('Unexpected error saving query:', err);
+      return { data: null, error: err as PostgrestError };
+    }
+  },
+
+  /**
+   * Delete a saved query
+   * @param id ID of the query to delete
+   * @returns Object containing success status or error
+   */
+  async deleteQuery(id: string): Promise<{ success: boolean; error: PostgrestError | null }> {
+    try {
+      const { error } = await supabase
+        .from('saved_queries')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error(`Error deleting saved query ${id}:`, error);
+        return { success: false, error };
+      }
+      
+      return { success: true, error: null };
+    } catch (err) {
+      console.error(`Unexpected error deleting saved query ${id}:`, err);
+      return { success: false, error: err as PostgrestError };
+    }
+  }
 };
 
 // Realtime suscriptions con Supabase
