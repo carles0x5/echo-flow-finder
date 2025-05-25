@@ -1,8 +1,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabaseSources } from '@/services/supabase';
+import { sourcesService } from '@/services/sources';
 import { Database } from '@/integrations/supabase/types';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 type SourceConfiguration = Database['public']['Tables']['source_configurations']['Row'];
 type SourceConfigurationInsert = Database['public']['Tables']['source_configurations']['Insert'];
@@ -10,92 +10,68 @@ type SourceConfigurationUpdate = Database['public']['Tables']['source_configurat
 
 export function useSources(userId?: string) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
-  // Query for fetching sources
   const {
     data: sources = [],
     isLoading,
     error,
-    refetch
   } = useQuery({
     queryKey: ['sources', userId],
     queryFn: async () => {
-      const { data, error } = await supabaseSources.getSources(userId);
+      const { data, error } = await sourcesService.getSources(userId);
       if (error) throw error;
       return data || [];
     },
+    enabled: !!userId,
   });
 
-  // Mutation for creating a source
   const createSourceMutation = useMutation({
-    mutationFn: async (source: SourceConfigurationInsert) => {
-      const { data, error } = await supabaseSources.createSource(source);
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources'] });
-      toast({
-        title: "Fuente creada",
-        description: "La fuente se ha creado exitosamente.",
-      });
+    mutationFn: (source: SourceConfigurationInsert) => 
+      sourcesService.createSource(source),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error('Error al crear la fuente: ' + result.error.message);
+      } else {
+        toast.success('Fuente creada exitosamente');
+        queryClient.invalidateQueries({ queryKey: ['sources'] });
+      }
     },
     onError: (error) => {
-      console.error('Error creating source:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo crear la fuente. Inténtalo de nuevo.",
-        variant: "destructive",
-      });
+      toast.error('Error inesperado al crear la fuente');
+      console.error('Create source error:', error);
     },
   });
 
-  // Mutation for updating a source
   const updateSourceMutation = useMutation({
-    mutationFn: async ({ id, source }: { id: string; source: SourceConfigurationUpdate }) => {
-      const { data, error } = await supabaseSources.updateSource(id, source);
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources'] });
-      toast({
-        title: "Fuente actualizada",
-        description: "La fuente se ha actualizado exitosamente.",
-      });
+    mutationFn: ({ id, source }: { id: string; source: SourceConfigurationUpdate }) =>
+      sourcesService.updateSource(id, source),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error('Error al actualizar la fuente: ' + result.error.message);
+      } else {
+        toast.success('Fuente actualizada exitosamente');
+        queryClient.invalidateQueries({ queryKey: ['sources'] });
+      }
     },
     onError: (error) => {
-      console.error('Error updating source:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo actualizar la fuente. Inténtalo de nuevo.",
-        variant: "destructive",
-      });
+      toast.error('Error inesperado al actualizar la fuente');
+      console.error('Update source error:', error);
     },
   });
 
-  // Mutation for deleting a source
   const deleteSourceMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { success, error } = await supabaseSources.deleteSource(id);
-      if (error || !success) throw error || new Error('Failed to delete source');
-      return success;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sources'] });
-      toast({
-        title: "Fuente eliminada",
-        description: "La fuente se ha eliminado exitosamente.",
-      });
+    mutationFn: (id: string) => sourcesService.deleteSource(id),
+    onSuccess: (result) => {
+      if (result.error) {
+        toast.error('Error al eliminar la fuente: ' + result.error.message);
+      } else {
+        toast.success('Fuente eliminada exitosamente');
+        queryClient.invalidateQueries({ queryKey: ['sources'] });
+      }
     },
     onError: (error) => {
-      console.error('Error deleting source:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar la fuente. Inténtalo de nuevo.",
-        variant: "destructive",
-      });
+      toast.error('Error inesperado al eliminar la fuente');
+      console.error('Delete source error:', error);
     },
   });
 
@@ -103,7 +79,6 @@ export function useSources(userId?: string) {
     sources,
     isLoading,
     error,
-    refetch,
     createSource: createSourceMutation.mutate,
     updateSource: updateSourceMutation.mutate,
     deleteSource: deleteSourceMutation.mutate,
